@@ -21,7 +21,7 @@ Key management utility for NuCypher (optional IPFS support)
    pip install -r requirements.txt
    ```
    
-4) Run nucypher ursula in a new tab of console
+4) Run nucypher ursula in a new tab of terminal
    
    ```
    nucypher ursula run --dev --federated-only 
