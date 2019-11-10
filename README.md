@@ -1,4 +1,4 @@
-## Nucypher KMS
+## NuCypher KMS
 Key management utility for NuCypher (optional IPFS support)
 
 ## Getting Started
