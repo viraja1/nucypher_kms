@@ -1,5 +1,5 @@
 ## NuCypher KMS
-Key management utility for NuCypher (optional IPFS support)
+Key management utility for NuCypher (optional IPFS support using Infura API)
 
 ## Getting Started
 
