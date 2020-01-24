@@ -1,6 +1,9 @@
 ## NuCypher KMS
 Key management utility for NuCypher (optional IPFS support using Infura API)
 
+## Demo
+https://www.youtube.com/watch?v=LPS2dFHBvl4
+
 ## Getting Started
 
 1) Clone Repo
