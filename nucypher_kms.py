@@ -7,9 +7,9 @@ import ipfshttpclient
 from umbral.keys import UmbralPrivateKey, UmbralPublicKey
 from nucypher.characters.lawful import Bob, Ursula, Enrico
 from nucypher.utilities.logging import GlobalLoggerSettings
-from nucypher.utilities.sandbox.constants import TEMPORARY_DOMAIN
+from nucypher.config.constants import TEMPORARY_DOMAIN
 from nucypher.network.middleware import RestMiddleware
-from nucypher.keystore.keypairs import DecryptingKeypair, SigningKeypair
+from nucypher.datastore.keypairs import DecryptingKeypair, SigningKeypair
 from nucypher.crypto.powers import DecryptingPower, SigningPower
 from nucypher.crypto.kits import UmbralMessageKit
 from nucypher.config.characters import AliceConfiguration
@@ -172,9 +172,9 @@ class KMS:
             policy_encrypting_key=policy_pubkey
         )
         retrieved_plaintexts = self.bob.retrieve(
+            message_kit,
             label=label,
-            message_kit=message_kit,
-            data_source=data_source,
+            enrico=data_source,
             alice_verifying_key=alice_sig_pubkey
         )
         retrieved_plaintexts = [x.decode('utf-8') for x in retrieved_plaintexts]

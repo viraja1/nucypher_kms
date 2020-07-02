@@ -1,5 +1,5 @@
-nucypher==1.1.0b0
-ipfshttpclient==0.4.12
+nucypher==2.1.0b12
+ipfshttpclient==0.4.13.2
 umbral==0.1.3a2
 maya==0.6.1
-ipython==7.9.0
+ipython==7.16.1
