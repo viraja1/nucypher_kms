@@ -1,9 +1,13 @@
 import os
 import datetime
 import json
+import base64
+import random
 
 import maya
+import arweave
 import ipfshttpclient
+from siaskynet import Skynet
 from umbral.keys import UmbralPrivateKey, UmbralPublicKey
 from nucypher.characters.lawful import Bob, Ursula, Enrico
 from nucypher.utilities.logging import GlobalLoggerSettings
@@ -88,18 +92,26 @@ def fetch_keys(path):
 
 
 class KMS:
-    def __init__(self, ursula_url, dir_name, passphrase):
+    def __init__(self, ursula_url, dir_name, passphrase, ipfs_addr='', arweave_wallet_file_path=''):
         """
         Args:
             ursula_url (str): ursula url e.g. localhost:10151
             dir_name (str): dir_name where account files will be stored in tmp directory
             passphrase (str): passphrase for account
+            ipfs_addr (str): ipfs addr (required only if you want to store data in ipfs)
+            arweave_wallet_file_path (str): arweave wallet file path (required only if you want to store
+                                            data in arweave)
         """
         self.ursula_url = ursula_url
         self.ursula = Ursula.from_seed_and_stake_info(seed_uri=self.ursula_url,
                                                       federated_only=True,
                                                       minimum_stake=0)
-        self.ipfs = ipfshttpclient.connect("/dns/ipfs.infura.io/tcp/5001/https")
+        self.arweave_wallet = None
+        if arweave_wallet_file_path:
+            self.arweave_wallet = arweave.Wallet(arweave_wallet_file_path)
+        self.ipfs = None
+        if ipfs_addr:
+            self.ipfs = ipfshttpclient.connect(ipfs_addr)
         self.temp_dir = os.path.join('/', 'tmp', dir_name)
         self.alice_config = AliceConfiguration(
             config_root=os.path.join(self.temp_dir),
@@ -215,53 +227,88 @@ class KMS:
         }
         return policy_info
 
-    def upload_data_ipfs(self, plaintext):
+    def upload_data(self, plaintext, storage):
         """
-        Upload data to ipfs
+        Upload data to the selected storage
 
         Args:
             plaintext (str): plaintext
+            storage (str): storage layer e.g. ipfs, arweave, skynet, etc.
 
         Returns:
-           label, data_source_public_key, ipfs_hash (bytes, bytes, str): tuple containing policy label,
-                                                                         data source public key and ipfs hash
+           label, data_source_public_key, hash_key (bytes, bytes, str): tuple containing policy label,
+                                                                         data source public key and hash_key
         """
         label, data_source_public_key, data = self.encrypt_data(plaintext=plaintext)
-        ipfs_hash = self.ipfs.add_bytes(data)
-        return label, data_source_public_key, ipfs_hash
+        if storage == "ipfs":
+            hash_key = self.ipfs.add_bytes(data)
+        elif storage == "arweave":
+            transaction = arweave.Transaction(self.arweave_wallet, data=data)
+            transaction.sign()
+            transaction.send()
+            hash_key = transaction.id
+        elif storage == "skynet":
+            file_name = '/tmp/{}.txt'.format(random.randint(100000000000, 999999999999))
+            file = open(file_name, 'wb')
+            file.write(data)
+            file.close()
+            hash_key = Skynet.upload_file(file_name)
+        else:
+            raise ValueError("invalid storage layer")
+        return label, data_source_public_key, hash_key
 
     @staticmethod
-    def get_shareable_code(ipfs_hash, data_source_public_key, policy_info):
+    def get_shareable_code(hash_key, data_source_public_key, policy_info, storage):
         """
         Get shareable code to fetch the secret which can be shared easily
 
         Args:
-             ipfs_hash (str): ipfs hash
+             hash_key (str): storage layer hash key
              data_source_public_key (bytes): data source public key
              policy_info (dict): dict containing policy_pubkey, alice_sig_pubkey and label keys
+             storage (str): storage layer e.g. ipfs, arweave, skynet, etc.
 
         Returns:
              shareable_code (str): shareable code
         """
-        return ipfs_hash + "_" + data_source_public_key.hex() + "_" + policy_info["policy_pubkey"] + "_" \
-            + policy_info["alice_sig_pubkey"] + "_" + policy_info["label"]
+        data = {
+            "hash": hash_key,
+            "data_source_public_key": data_source_public_key.hex(),
+            "policy_info": policy_info,
+            "storage": storage
+        }
+        return base64.b64encode(json.dumps(data, separators=(',', ':')).encode("utf-8")).decode('utf-8')
 
-    def fetch_data_ipfs(self, shareable_code):
+    def fetch_data(self, shareable_code, storage):
         """
-        Fetch data from ipfs and decrypt it
+        Fetch data from the selected storage and decrypt it
 
         Args:
             shareable_code (str): shareable code
+            storage (str): storage layer e.g. ipfs, arweave, skynet, etc.
 
         Returns:
             retrieved_plaintexts (list): list of str
         """
-        ipfs_hash, data_source_public_key, policy_pubkey, alice_sig_pubkey, label = shareable_code.split("_")
-        data = self.ipfs.cat(ipfs_hash)
+        meta_data = json.loads(base64.b64decode(shareable_code.encode('utf-8')).decode('utf-8'))
+        data_source_public_key = meta_data['data_source_public_key']
+        hash_key = meta_data['hash']
+        if storage == "ipfs":
+            data = self.ipfs.cat(hash_key)
+        elif storage == "arweave":
+            transaction = arweave.Transaction(self.arweave_wallet, id=hash_key)
+            transaction.get_data()
+            data = transaction.data
+            if data == b'':
+                raise ValueError("Transaction not found. Wait for some more time")
+        elif storage == "skynet":
+            file_name = '/tmp/{}.txt'.format(random.randint(100000000000, 999999999999))
+            Skynet.download_file(file_name, hash_key)
+            file = open(file_name, 'rb')
+            data = file.read()
+            file.close()
+        else:
+            raise ValueError("invalid storage layer")
         data_source_public_key = bytes.fromhex(data_source_public_key)
-        policy_info = {
-            "policy_pubkey": policy_pubkey,
-            "alice_sig_pubkey": alice_sig_pubkey,
-            "label": label,
-        }
+        policy_info = meta_data["policy_info"]
         return self.decrypt_data(data_source_public_key=data_source_public_key, data=data, policy_info=policy_info)

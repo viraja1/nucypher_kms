@@ -3,3 +3,6 @@ ipfshttpclient==0.4.13.2
 umbral==0.1.3a2
 maya==0.6.1
 ipython==7.16.1
+pycryptodome==3.9.8
+arweave-python-client==1.0.1
+siaskynet==1.0.2
