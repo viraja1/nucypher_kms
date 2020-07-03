@@ -15,7 +15,7 @@ Key management utility for NuCypher (optional support for multiple decentralized
    cd nucypher_kms
    ```
    
-3) Install requirements (tested only for python 3.7)
+3) Install requirements (tested only for python 3.7 and pip 18.1)
     
    ```
    pip install -r requirements.txt
